@@ -1,0 +1,101 @@
+# Day 2 reference solution: kubectl apply -f solution.yaml
+# Task 1
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: team-api
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# Task 2
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-policy
+  namespace: team-api
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:          # one list item: namespace AND pod must match
+        matchLabels:
+          kubernetes.io/metadata.name: team-web
+      podSelector:
+        matchLabels:
+          app: web
+    ports:
+    - protocol: TCP
+      port: 80
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: team-db
+      podSelector:
+        matchLabels:
+          app: db
+    ports:
+    - protocol: TCP
+      port: 80
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+# Task 3
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-metadata
+  namespace: team-web
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:                    # outside the cluster: everything but metadata
+        cidr: 0.0.0.0/0
+        except:
+        - 169.254.169.254/32
+    - namespaceSelector: {}       # inside the cluster: all pods (incl. DNS). Cilium does not match pods with ipBlock
+---
+# Task 4
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: db-ingress
+  namespace: team-db
+spec:
+  endpointSelector:
+    matchLabels:
+      app: db
+  ingress:
+  - fromEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: team-api
+        app: api
+    toPorts:
+    - ports:
+      - port: "80"
+        protocol: TCP
+      rules:
+        http:
+        - method: GET

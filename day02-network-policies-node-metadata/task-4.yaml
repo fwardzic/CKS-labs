@@ -1,0 +1,22 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: db-ingress
+  namespace: team-db
+spec:
+  endpointSelector:
+    matchLabels:
+      app: db
+  enableDefaultDeny:
+    ingress: false
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app: api
+            io.kubernetes.pod.namespace: team-api
+      toPorts:
+        - ports:
+            - port: "80"
+          rules:
+            http:
+              - method: GET
